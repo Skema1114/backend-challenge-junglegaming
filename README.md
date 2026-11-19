@@ -1,114 +1,63 @@
 # Distributed Wagering Processor
 
-Serviço financeiro distribuído para processamento de transações de apostas (`BET`, `WIN`, `LOSS`, `REFUND`, `ROLLBACK`) com foco em correção monetária, concorrência multi-instância, idempotência persistente, ledger imutável, Inbox/Outbox transacionais e recuperação após falhas.
+Serviço em Bun, NestJS, TypeScript, MikroORM, PostgreSQL e AWS SQS (LocalStack) para processar transações de apostas (`BET`, `WIN`, `LOSS`, `REFUND`, `ROLLBACK`) com controle de concorrência por wallet, idempotência persistente, ledger imutável e Inbox/Outbox transacionais.
 
-- Documentação de decisões arquiteturais e trade-offs: [ARCHITECTURE.md](./ARCHITECTURE.md)
-- Enunciado original do desafio: [CHALLENGE.md](./CHALLENGE.md)
+As decisões de modelagem e trade-offs estão em [ARCHITECTURE.md](./ARCHITECTURE.md) e o enunciado original ficou salvo em [CHALLENGE.md](./CHALLENGE.md).
 
----
+## Como subir localmente
 
-## Stack
+Você precisa de [Bun](https://bun.sh) 1.x e Docker Compose instalados.
 
-- **Runtime / Package Manager / Test Runner:** Bun 1.x
-- **Linguagem:** TypeScript (`strict: true`)
-- **Framework:** NestJS 11
-- **ORM / Migrations:** MikroORM 6 (`@mikro-orm/postgresql`, `@mikro-orm/migrations`)
-- **Banco de Dados:** PostgreSQL 16
-- **Mensageria:** AWS SQS FIFO via LocalStack (`wager-transactions.fifo`, `wager-transactions-dlq.fifo`, `wager-events.fifo`)
-- **Precisão Monetária:** `decimal.js` + `NUMERIC(19,2)` no PostgreSQL
+Copie as variáveis de ambiente, instale as dependências e suba PostgreSQL 16 + LocalStack SQS:
 
----
-
-## Setup Local
-
-### 1. Pré-requisitos
-- [Bun](https://bun.sh) 1.x
-- Docker e Docker Compose
-
-### 2. Variáveis de ambiente e dependências
 ```bash
 cp .env.example .env
 bun install
-```
-
-### 3. Subir infraestrutura (PostgreSQL + LocalStack SQS)
-```bash
 docker compose up -d
 ```
-O script [`docker/localstack/init-sqs.sh`](./docker/localstack/init-sqs.sh) cria automaticamente as filas FIFO:
-- `wager-transactions.fifo` (com `RedrivePolicy` apontando para a DLQ após `maxReceiveCount=5`)
-- `wager-transactions-dlq.fifo`
-- `wager-events.fifo` (destino dos eventos publicados pela Outbox)
 
-> Nota de portas locais: o `docker-compose.yml` expõe PostgreSQL na porta `5439` (configurável via `DB_PORT`) e LocalStack na `4566`; a aplicação sobe por padrão na porta `3100` (`PORT`).
+O script [docker/localstack/init-sqs.sh](./docker/localstack/init-sqs.sh) cria automaticamente as filas `wager-transactions.fifo` (com `RedrivePolicy` após `maxReceiveCount=5`), `wager-transactions-dlq.fifo` e `wager-events.fifo`. Por padrão o compose expõe o PostgreSQL na porta `5439` (`DB_PORT`) e o LocalStack na `4566`; a aplicação sobe na `3100` (`PORT`).
 
-### 4. Executar migrations (versionadas e reversíveis)
+Rode as migrations e inicie o servidor:
+
 ```bash
 bun run migration:up
-# Para reverter:
-bun run migration:down
-```
-
-### 5. Iniciar a aplicação
-```bash
 bun run start:dev
-# ou produção/direto:
-bun run start
 ```
 
----
+Para reverter a migration, use `bun run migration:down`.
 
 ## Endpoints HTTP
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/wallets` | Cria wallet (se `initialBalance > 0`, cria transação `OPENING` + `CREDIT` no ledger atomicamente) |
-| `GET` | `/wallets/:walletId` | Consulta estado e versão da wallet |
-| `GET` | `/wallets/:walletId/ledger?cursor=...&limit=50` | Consulta paginada por cursor opaco do ledger |
-| `POST` | `/wallets/:walletId/reconciliation` | Compara saldo materializado vs soma do ledger |
-| `POST` | `/wagering/transactions` | Submete transação (header `Idempotency-Key` obrigatório) |
-| `GET` | `/wagering/transactions/:transactionId` | Consulta transação por ID interno |
-| `GET` | `/providers/:providerId/wagering/transactions/:externalTransactionId` | Consulta transação por ID do provedor |
-| `GET` | `/health/live` | Liveness probe (sem autenticação) |
-| `GET` | `/health/ready` | Readiness probe verificando PostgreSQL e SQS (sem autenticação) |
-| `GET` | `/metrics` | Métricas em formato Prometheus |
-| `GET` | `/metrics/json` | Métricas em formato JSON |
+| `POST` | `/wallets` | Cria carteira (se `initialBalance > 0`, cria transação `OPENING` + lançamento `CREDIT` na mesma transação SQL) |
+| `GET` | `/wallets/:walletId` | Consulta saldo e versão da carteira |
+| `GET` | `/wallets/:walletId/ledger?cursor=...&limit=50` | Lista lançamentos com paginação por cursor opaco |
+| `POST` | `/wallets/:walletId/reconciliation` | Compara saldo materializado com a soma do ledger |
+| `POST` | `/wagering/transactions` | Processa transação (exige header `Idempotency-Key`) |
+| `GET` | `/wagering/transactions/:transactionId` | Busca transação por ID interno |
+| `GET` | `/providers/:providerId/wagering/transactions/:externalTransactionId` | Busca transação por ID externo do provedor |
+| `GET` | `/health/live` | Liveness probe |
+| `GET` | `/health/ready` | Readiness probe verificando PostgreSQL e SQS |
+| `GET` | `/metrics` | Métricas em formato Prometheus (`/metrics/json` para JSON) |
 
----
-
-## Scripts e Testes
+## Testes e verificação
 
 ```bash
-# Verificação de tipos (TypeScript strict)
 bun run typecheck
-
-# Testes unitários (Money, Wallet, Ledger, WagerTransaction, IntegrationEvent, Outbox)
+bun run build
 bun run test:unit
-
-# Testes de integração reais (PostgreSQL + LocalStack SQS)
 bun run test:integration
-
-# Testes de concorrência e crash recovery (paralelismo real, >= 3 processos OS, kill pós-commit)
 bun run test:concurrency
-
-# Suíte completa em sequência (unit -> integration -> concurrency)
 bun run test
-
-# Experimento de carga contra 3 instâncias simultâneas + reconciliação final
 bun run test:load
 ```
 
----
+`bun run test` executa as suítes unitária, de integração (contra PostgreSQL e LocalStack reais) e de concorrência (8 cenários reais incluindo 50 apostas paralelas idênticas, disputa de saldo `100.00` vs `2x 80.00`, 3 instâncias em processos separados, queda de worker após commit antes do ack, dois publishers na outbox, entrega fora de ordem e reinício de serviço).
 
-## Resultados do Teste de Carga (`bun run test:load`)
+## Medição do teste de carga (`bun run test:load`)
 
-Experimento executado localmente contra PostgreSQL 16 e LocalStack 3.8 em containers Docker, com **3 instâncias NestJS/Bun simultâneas** (`load-1`, `load-2`, `load-3`) e **24 workers concorrentes**:
+Rodei o teste de carga localmente contra os containers Docker com 3 instâncias simultâneas (`load-1`, `load-2`, `load-3`) e 24 workers concorrentes enviando 300 requisições (`BET`, `WIN`, `LOSS` e replays idempotentes) para 12 carteiras, com 2 delas concentrando cerca de um terço do tráfego.
 
-- **Cenário:** 300 requisições (`BET`, `WIN`, `LOSS` e replays idempotentes intencionais) distribuídas entre 12 wallets, sendo 2 *hot wallets* recebendo ~1/3 de todo o tráfego para forçar contenção de lock.
-- **Duração total:** `1223.74 ms`
-- **Throughput:** `245.15 req/s`
-- **Latência:** `p50 = 81.49 ms` | `p95 = 191.07 ms` | `p99 = 263.99 ms` | `max = 303.31 ms`
-- **Distribuição de respostas:** `281` criadas (`201`), `19` replays idempotentes (`200`), `0%` de erros inesperados (`5xx`/rede)
-- **Conflitos de lock / deadlocks:** `0` (serialização determinística por linha via `SELECT ... FOR UPDATE` por `walletId`)
-- **Outbox lag sob rajada:** `552` eventos gerados, `392` ainda pendentes após `1s` de dreno (o publisher atual envia 1 evento por chamada HTTP ao LocalStack SQS em lotes de `25`; em produção de maior vazão, recomenda-se `SendMessageBatch` com até 10 eventos por requisição SQS)
-- **Reconciliação final:** `12 / 12` wallets consistentes (`wallet.balance == ledger`)
+As 300 requisições terminaram em `1223.74 ms` (`245.15 req/s`), com latência `p50 = 81.49 ms`, `p95 = 191.07 ms`, `p99 = 263.99 ms` e máxima de `303.31 ms`. Foram `281` respostas `201` e `19` replays `200`, sem erros `5xx` nem conflitos de deadlock, e todas as 12 carteiras fecharam consistentes na reconciliação final. Na outbox, dos `552` eventos gerados, `392` ainda estavam na fila após 1 segundo porque o publisher atual envia 1 evento por chamada SQS em lotes de 25.
