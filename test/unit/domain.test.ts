@@ -174,6 +174,24 @@ describe("Domain entities & canonical hashing", () => {
     });
     expect(rollbackOfWin.ledgerDirectionFor(win)).toBe(LedgerDirection.Debit);
     expect(rollbackOfWin.ledgerDirectionFor(bet)).toBe(LedgerDirection.Credit);
+
+    const refund = WagerTransaction.create({
+      id: "tx-refund",
+      providerId: "prov",
+      externalTransactionId: "ext-refund",
+      idempotencyKey: "k-refund",
+      payloadHash: "h-refund",
+      walletId: "w-1",
+      playerId: "p-1",
+      roundId: "r-1",
+      gameId: "g-1",
+      kind: WagerTransactionKind.Refund,
+      money: Money.from({ amount: "20.00", currency: "BRL" }),
+      referenceExternalTransactionId: "ext-bet",
+    });
+    expect(rollbackOfWin.ledgerDirectionFor(refund)).toBe(LedgerDirection.Debit);
+    expect(bet.matchesPayload("h-bet")).toBe(true);
+    expect(bet.matchesPayload("h-other")).toBe(false);
   });
 
   it("serializes IntegrationEvent subclasses and schedules OutboxMessage backoff", () => {

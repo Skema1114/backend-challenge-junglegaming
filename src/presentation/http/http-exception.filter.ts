@@ -21,6 +21,18 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
     const correlationId = request.header("x-correlation-id") ?? undefined;
 
+    if (
+      exception instanceof SyntaxError &&
+      "status" in exception &&
+      (exception as SyntaxError & { status?: unknown }).status === 400
+    ) {
+      response.status(HttpStatus.BAD_REQUEST).json({
+        error: "INVALID_JSON",
+        message: "Malformed JSON request body",
+      });
+      return;
+    }
+
     if (exception instanceof ZodError) {
       response.status(HttpStatus.BAD_REQUEST).json({
         error: "VALIDATION_ERROR",

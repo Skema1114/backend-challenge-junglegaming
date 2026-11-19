@@ -328,6 +328,14 @@ describe("Integration: PostgreSQL + LocalStack SQS", () => {
     });
     expect(usdRes.status).toBe(422);
     expect(((await usdRes.json()) as { failureCode: string }).failureCode).toBe("CURRENCY_MISMATCH");
+
+    // 11. Malformed JSON returns 400 Bad Request, not 500
+    const badJsonRes = await fetch(`${app.baseUrl}/wallets`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{bad-json",
+    });
+    expect(badJsonRes.status).toBe(400);
   });
 
   it("consumes SQS messages via inbox deduplication, publishes outbox events, and routes malformed payloads to DLQ", async () => {
