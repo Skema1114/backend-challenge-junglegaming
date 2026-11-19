@@ -4,7 +4,7 @@
   "private": true,
   "description": "Distributed wagering processor built with NestJS, Bun, MikroORM, PostgreSQL and SQS",
   "scripts": {
-    "build": "bun build src/main.ts --outdir dist --target bun",
+    "build": "bun build src/main.ts --outdir dist --target bun --packages=external",
     "start": "bun run src/main.ts",
     "start:dev": "bun --watch src/main.ts",
     "typecheck": "tsc --noEmit",
@@ -13,7 +13,7 @@
     "test:unit": "bun test test/unit",
     "test:integration": "bun test test/integration",
     "test:concurrency": "bun test test/concurrency",
-    "test": "bun test",
+    "test": "bun test test/unit && bun test test/integration && bun test test/concurrency",
     "test:load": "bun run test/load/load-test.ts"
   },
   "dependencies": {

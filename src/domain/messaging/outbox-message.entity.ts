@@ -28,7 +28,7 @@ export class OutboxMessage {
       event.eventId,
       event.aggregateId,
       event.eventType,
-      event.toJSON() as unknown as Readonly<Record<string, unknown>>,
+      JSON.parse(JSON.stringify(event.toJSON())) as Readonly<Record<string, unknown>>,
       event.occurredAt,
       0,
       event.occurredAt,
