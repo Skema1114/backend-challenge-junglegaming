@@ -1,0 +1,38 @@
+{
+  "name": "distributed-wagering-processor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Distributed wagering processor built with NestJS, Bun, MikroORM, PostgreSQL and SQS",
+  "scripts": {
+    "build": "bun build src/main.ts --outdir dist --target bun",
+    "start": "bun run src/main.ts",
+    "start:dev": "bun --watch src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "migration:up": "bun run src/infrastructure/persistence/run-migrations.ts up",
+    "migration:down": "bun run src/infrastructure/persistence/run-migrations.ts down",
+    "test:unit": "bun test test/unit",
+    "test:integration": "bun test test/integration",
+    "test:concurrency": "bun test test/concurrency",
+    "test": "bun test",
+    "test:load": "bun run test/load/load-test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.750.0",
+    "@mikro-orm/core": "^6.4.0",
+    "@mikro-orm/migrations": "^6.4.0",
+    "@mikro-orm/nestjs": "^6.0.3",
+    "@mikro-orm/postgresql": "^6.4.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "decimal.js": "^10.4.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/express": "^5.0.0",
+    "typescript": "^5.7.3"
+  }
+}
