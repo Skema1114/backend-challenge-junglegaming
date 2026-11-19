@@ -15,7 +15,7 @@ export const WalletSchema = new EntitySchema<WalletRecord>({
     playerId: { type: "string", fieldName: "player_id", length: 128 },
     currency: { type: "string", length: 3 },
     balance: { type: "decimal", precision: 19, scale: 2 },
-    version: { type: "integer", version: true, default: 1 },
+    version: { type: "integer", default: 1 },
     createdAt: { type: "Date", fieldName: "created_at" },
     updatedAt: { type: "Date", fieldName: "updated_at" },
   },
